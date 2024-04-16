@@ -5,7 +5,8 @@ import anvil.js
 from anvil import BlobMedia
 from anvil.js.window import jQuery, ej, FileReader, Uint8Array, Event
 from ..datamodel.types import FieldTypes
-from ..tools.utils import AppEnv, DotDict, new_el_id
+from ..datamodel.particles import ModelTypeBase
+from ..tools.utils import AppEnv, DotDict, new_el_id, label_to_id
 import datetime
 
 
@@ -164,7 +165,8 @@ class BaseInput:
             anvil.js.window.document.getElementById(self.container_id).innerHTML = self.html + self.shadow_label
             if self._control is None:
                 self.create_control()
-            self.control.appendTo(f"#{self.el_id}")
+            if self.control:
+                self.control.appendTo(f"#{self.el_id}")
             self.value = self._value
             self.visible = True
             self.enabled = self._enabled
@@ -207,22 +209,26 @@ class BaseInput:
 
 
 class Button(BaseInput):
-    def __init__(self, icon=None, action=None, **kwargs):
+    def __init__(self, is_primary=True, content=None, icon=None, action=None, **kwargs):
         super().__init__(**kwargs)
         self.type = 'Button'
+        self.content = content
         self.icon = icon
         self.action = action
-        self.html = f'<button id="{self.el_id}" name="{self.el_id}">{self.label}</button>'
+        self.is_primary = is_primary
+        self.html = f'<div id="{self.el_id}" name="{self.el_id}">{self.content}</div>'
+        self.save = False
 
     def create_control(self):
         self.control = ej.buttons.Button({
-            'content': self.label,
+            'content': self.content,
             'iconCss': f'fa-solid fa-{self.icon}' if self.icon else '',
             'cssClass': self.css_class or '',
+            'isPrimary': True if self.is_primary else False,
         })
 
-    def show(self):
-        super().show()
+    # def show(self):
+    #     super().show()
         # self.control.element.onclick = self.action
     #     if not self.visible:
     #         if self._control is None:
@@ -243,12 +249,12 @@ class Button(BaseInput):
         pass
 
     @property
-    def value(self):
-        return self.label
+    def content(self):
+        return self._content
 
-    @value.setter
-    def value(self, value):
-        self.label = value
+    @content.setter
+    def content(self, value):
+        self._content = value
         if self._control is not None:
             self.control.content = value
 
@@ -270,7 +276,29 @@ class Button(BaseInput):
 
     @required.setter
     def required(self, value):
-        pass
+        self._value = value
+
+    def show(self):
+        super().show()
+        self.control.element.onclick = self.action
+
+
+class DropdownButton(Button):
+    def __init__(self, options=None, **kwargs):
+        super().__init__(**kwargs)
+        self.type = 'Input'
+        self.options = options
+        # self.html = f'<div id="{self.el_id}" name="{self.el_id}">{self.content}</div>'
+
+    def create_control(self):
+        self.control = ej.splitbuttons.DropDownButton({
+            'content': self.content,
+            'iconCss': f'fa-solid fa-{self.icon}' if self.icon else '',
+            'cssClass': self.css_class or '',
+            'isPrimary': True if self.is_primary else False,
+            'items': [{'id': label_to_id(option), 'text': option} for option in self.options],
+            'select': self.action,
+        })
 
 
 class HiddenInput(BaseInput):
@@ -500,7 +528,7 @@ class CheckboxInput(BaseInput):
 
         self.html = f'\
       <div class="form-group pm-form-group">\
-        <input type="checkbox" class="form-control pm-checkbox-input" id="{self.el_id}" name="{self.el_id}">\
+        <input type="checkbox" class="form-control da-checkbox-input" id="{self.el_id}" name="{self.el_id}">\
       </div>'
 
         self.grid_column['type'] = 'boolean'
@@ -510,7 +538,7 @@ class CheckboxInput(BaseInput):
         self.control = ej.buttons.CheckBox({
             'label': self.label,
             'labelPosition': self.label_position,
-            'cssClass': 'pm-checkbox-input',
+            'cssClass': self.css_class or 'da-checkbox-input',
         })
 
     @property
@@ -619,6 +647,7 @@ class DropdownInput(BaseInput):
         if self.select == 'single':
             self.control = ej.dropdowns.DropDownList({
                 'placeholder': self.placeholder,
+                'cssClass': self.css_class,
                 'showClearButton': True,
                 'fields': self.fields,
                 'dataSource': self.options,
@@ -627,6 +656,7 @@ class DropdownInput(BaseInput):
         elif self.select == 'multi':
             self.control = ej.dropdowns.MultiSelect({
                 'placeholder': self.placeholder,
+                'cssClass': self.css_class,
                 'showClearButton': True,
                 'fields': self.fields,
                 'dataSource': self.options,
@@ -668,7 +698,7 @@ class LookupInput(DropdownInput):
                  add_item=False, inline_grid=False,
                  **kwargs):
         self.model = model
-        self.text_field = text_field or 'name'
+        self.text_field = text_field or getattr(AppEnv.data_models, self.model)._title
         self.compute_option = compute_option
         self.add_item = add_item
         self.add_item_label = add_item_label or 'Add Item'
@@ -720,7 +750,7 @@ class LookupInput(DropdownInput):
     def get_options(self, data):
         options = []
         for option in data:
-            data_row = option.get('row', option)
+            data_row = option if (isinstance(option, ModelTypeBase)) else option.get('row', option)
             if self.compute_option and callable(self.compute_option):
                 name = self.compute_option(data_row)
             else:
@@ -730,7 +760,7 @@ class LookupInput(DropdownInput):
         return options
 
     def get_field_value(self, data, field):
-        print('get field value', data, field)
+        # print('get field value', data, field)
         field_name = field.split('.', 1)
         if len(field_name) > 1:
             return self.get_field_value(data[field_name[0]], field_name[1])
@@ -917,37 +947,48 @@ class FileUploadInput(BaseInput):
 
 # Form inline message area
 class InlineMessage(BaseInput):
-    def __init__(self, message=None, **kwargs):
+    def __init__(self, content=None, label_css=None, **kwargs):
         super().__init__(**kwargs)
 
-        self.html = f'<div id="{self.el_id}"></div>'
-        self._message = message
-        self._type = None
+        # self.html = f'<div id="{self.el_id}"></div>'
+        if not self.css_class:
+            self.css_class = 'da-form-input-message'
+        label_css = label_css or 'da-form-input-label'
+        self.html = f'\
+            <div class="form-group da-form-group">\
+                <div id="label_{self.el_id}" class="{label_css}">{self.label or ""}</div>\
+                <div id="{self.el_id}" name="{self.el_id}" class="{self.css_class}"></div>\
+            </div>'
+        self._content = content or ''
+        self._message_type = None
         self.save = False
 
     @property
-    def message(self):
-        return self._message
+    def content(self):
+        return self._content
 
-    @message.setter
-    def message(self, message):
-        self._message = message
-        anvil.js.window.document.getElementById(self.el_id).innerHTML = message
+    @content.setter
+    def content(self, content):
+        self._content = content or ''
+        el = anvil.js.window.document.getElementById(self.el_id)
+        if el:
+            el.innerHTML = self._content
 
     @property
-    def type(self):
-        return self._type
+    def message_type(self):
+        return self._message_type
 
-    @type.setter
-    def type(self, value):
-        self._type = value
-        if self._type is not None:
-            anvil.js.window.document.getElementById(self.el_id).className = self._type
-        else:
-            anvil.js.window.document.getElementById(self.el_id).className = ''
+    @message_type.setter
+    def message_type(self, value):
+        self._message_type = value
+        if self.visible:
+            if self._message_type is not None:
+                anvil.js.window.document.getElementById(self.el_id).className = self._message_type
+            else:
+                anvil.js.window.document.getElementById(self.el_id).className = ''
 
     def show(self):
         if not self.visible:
             anvil.js.window.document.getElementById(self.container_id).innerHTML = self.html
-            anvil.js.window.document.getElementById(self.el_id).innerHTML = self._message
+            anvil.js.window.document.getElementById(self.el_id).innerHTML = self._content
             self.visible = True

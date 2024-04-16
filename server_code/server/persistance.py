@@ -11,7 +11,7 @@ from importlib import import_module
 from uuid import uuid4
 from datetime import datetime, date
 
-from ..datamodel.particles import ModelSearchResults, ModelTypeBase
+from ..datamodel.particles import ModelSearchResults, ModelTypeBase, SYSTEM_TENANT_UID
 from ..datamodel import types
 from ..tools.utils import AppEnv
 from . import security
@@ -37,9 +37,8 @@ def caching_query(search_function):
                 search_args[arg] = ref_row
         if 'tenant_uid' not in search_args.keys():
             search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
-        # if (anvil.server.session['user_permissions'].get('super_admin', False)
-        #         and not anvil.server.session['user_permissions'].get('locked_tenant', False)):
-        if user_permissions['super_admin'] and not user_permissions['locked_tenant']:
+        if (user_permissions['super_admin'] and not user_permissions['locked_tenant']
+                and search_args['tenant_uid'] != SYSTEM_TENANT_UID):
             search_args.pop('tenant_uid', None)
         search_query = search_args.pop('search_query', None)
         table = get_table(module_name, class_name)
@@ -55,6 +54,7 @@ def caching_query(search_function):
         rows_id = str(uuid4())
         anvil.server.session[rows_id] = search_args
         # print('caching_query', class_name, module_name, rows_id, page_length, page, max_depth, length)
+        # print('search_args', search_args)
         return ModelSearchResults(
             class_name,
             module_name,
@@ -99,28 +99,17 @@ def get_user_permissions(logged_user=None, background_task_id=None):
 
 def _get_row(module_name, class_name, uid, background_task_id=None, **search_args):
     """Return the data tables row for a given object instance"""
-    search_args['uid'] = uid
-    logged_user = get_logged_user(background_task_id=background_task_id)
-    user_permissions = get_user_permissions(logged_user=logged_user)
-    # if (not user_permissions['super_admin'] or
-    #         (user_permissions['developer'] and 'tenant_uid' not in search_args.keys())):
-    #     search_args['tenant_uid'] = anvil.server.session.get('tenant_uid', None)
-    # if (not user_permissions['super_admin']
-    #         and not user_permissions.get('locked_tenant', False)
-    #         and 'tenant_uid' not in search_args.keys()):
-    #     search_args['tenant_uid'] = anvil.server.session.get('tenant_uid', None)
-    # print('persistence', anvil.server.session)
-    # if not anvil.server.session.get('user_permissions', {}).get('super_admin', False):
-    #     search_args['tenant_uid'] = anvil.server.session.get('tenant_uid', None)
-    # else:
-    #     if anvil.server.session.get('user_permissions', {}).get('locked_tenant', False):
-    #         search_args['tenant_uid'] = anvil.server.session.get('tenant_uid', None)
-    if not user_permissions['super_admin']:
-        search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
-    else:
-        if user_permissions['locked_tenant']:
-            search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
-    return get_table(module_name, class_name).get(**search_args)
+    # search_args['uid'] = uid
+    # logged_user = get_logged_user(background_task_id=background_task_id)
+    # user_permissions = get_user_permissions(logged_user=logged_user)
+    # if 'tenant_uid' not in search_args.keys():
+    #     if not user_permissions['super_admin']:
+    #         search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
+    #     else:
+    #         if user_permissions['locked_tenant']:
+    #             search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
+    # return get_table(module_name, class_name).get(**search_args)
+    return get_table(module_name, class_name).get(uid=uid)
 
 
 def _get_row_by(module_name, class_name, prop, value, background_task_id=None, **search_args):
@@ -139,11 +128,12 @@ def _get_row_by(module_name, class_name, prop, value, background_task_id=None, *
     #         and not user_permissions.get('locked_tenant', False)
     #         and 'tenant_uid' not in search_args.keys()):
     #     search_args['tenant_uid'] = anvil.server.session.get('tenant_uid', None)
-    if not user_permissions['super_admin']:
-        search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
-    else:
-        if user_permissions['locked_tenant']:
+    if 'tenant_uid' not in search_args.keys():
+        if not user_permissions['super_admin']:
             search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
+        else:
+            if user_permissions['locked_tenant']:
+                search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
     return get_table(module_name, class_name).get(**search_args)
 
 
@@ -156,11 +146,12 @@ def _search_rows(module_name, class_name, uids, background_task_id=None):
     #         and not anvil.server.session['user_permissions'].get('locked_tenant', False)
     #         and 'tenant_uid' not in search_args.keys()):
     #     search_args['tenant_uid'] = anvil.server.session.get('tenant_uid', None)
-    if not user_permissions['super_admin']:
-        search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
-    else:
-        if user_permissions['locked_tenant']:
+    if 'tenant_uid' not in search_args.keys():
+        if not user_permissions['super_admin']:
             search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
+        else:
+            if user_permissions['locked_tenant']:
+                search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
     return get_table(module_name, class_name).search(**search_args)
 
 
@@ -236,15 +227,19 @@ def get_object_by(class_name, module_name, prop, value, max_depth=None, backgrou
 @anvil.server.callable
 def fetch_objects(class_name, module_name, rows_id, page, page_length, max_depth=None, background_task_id=None):
     """Return a list of object instances from a cached data tables search"""
+    # print('fetch_objects', class_name, module_name, rows_id, page, page_length, max_depth, background_task_id)
     logged_user = get_logged_user(background_task_id=background_task_id)
     user_permissions = get_user_permissions(logged_user=logged_user)
     search_definition = anvil.server.session.get(rows_id, None).copy()
+    # print('search_definition', search_definition)
+    # if search_definition is not None and 'tenant_uid' not in search_definition.keys():
     if search_definition is not None:
-        if not user_permissions['super_admin']:
-            search_definition['tenant_uid'] = logged_user.get('tenant_uid', None)
-        else:
-            if user_permissions['locked_tenant']:
+        if 'tenant_uid' not in search_definition.keys():
+            if not user_permissions['super_admin']:
                 search_definition['tenant_uid'] = logged_user.get('tenant_uid', None)
+            else:
+                if user_permissions['locked_tenant']:
+                    search_definition['tenant_uid'] = logged_user.get('tenant_uid', None)
         class_name = search_definition.pop("class_name")
         search_query = search_definition.pop("search_query", None)
         # print('search_definition 2', search_definition)
@@ -274,7 +269,7 @@ def fetch_objects(class_name, module_name, rows_id, page, page_length, max_depth
         ],
         is_last_page,
     )
-    #print('results', len(results[0]), results[1])
+    # print('results', len(results[0]), results[1])
     return results
 
 
@@ -428,11 +423,12 @@ def fetch_view(class_name, module_name, columns, search_queries, filters):
                 filters[key] = q.any_of(*[[row] for row in rel_rows])
             else:
                 filters[key] = q.any_of(*rel_rows)
-    if not user_permissions['super_admin']:
-        filters['tenant_uid'] = logged_user.get('tenant_uid', None)
-    else:
-        if user_permissions['locked_tenant']:
+    if 'tenant_uid' not in filters.keys():
+        if not user_permissions['super_admin']:
             filters['tenant_uid'] = logged_user.get('tenant_uid', None)
+        else:
+            if user_permissions['locked_tenant']:
+                filters['tenant_uid'] = logged_user.get('tenant_uid', None)
 
     etime = datetime.now()
     # print('fetch_view: build query', (etime - stime))

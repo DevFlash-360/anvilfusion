@@ -317,6 +317,15 @@ class FormBase:
             if field.on_change is not None:
                 # print('on_change', field.name)
                 field.on_change({'name': field.name, 'value': field.value})
+        if self.action == 'view':
+            for field in self.form_fields:
+                field.enabled = False
+            for button in self.form.getButtons():
+                if 'da-save-button' in button.cssClass:
+                    button.element.style.display = 'none'
+                elif 'da-cancel-button' in button.cssClass:
+                    button.content = 'Close'
+
         self.container_el.style.visibility = 'visible'
         self.form.cssClass = 'e-fixed py-dialog'
         if self.form_tabs is not None:
