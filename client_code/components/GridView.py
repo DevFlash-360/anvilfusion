@@ -5,6 +5,7 @@ from . import FormBase
 from ..tools.utils import AppEnv, camel_to_title
 import string
 import uuid
+import time
 
 GRID_TOOLBAR_COMMAND_ADD = {'id': 'add', 'text': '', 'prefixIcon': 'e-add', 'tooltipText': 'Add', 'align': 'Right'}
 GRID_TOOLBAR_COMMAND_DELETE = {'id': 'delete', 'text': '', 'prefixIcon': 'e-delete', 'tooltipText': 'Delete',
@@ -125,6 +126,7 @@ class GridView:
                  persist=True,
                  edit_mode='dialog',
                  add_edit_form=None,
+                 content_wrap=True,
                  data=None,
                  ):
 
@@ -231,7 +233,7 @@ class GridView:
                         'width': column.get('width', None) or GRID_DEFAULT_COLUMN_WIDTH,
                     }
                 else:
-                    # print('column', column['name'])
+                    print('column', column['name'])
                     col_attr, _ = get_model_attribute(self.model, column['name'])
                     if '.' in column['name']:
                         if col_attr.field_type == dmtypes.FieldTypes.OBJECT and col_attr.schema:
@@ -281,22 +283,29 @@ class GridView:
             self.grid_config['pageSettings'] = {'pageSize': 1000000}
         if 'Edit' in self.grid_view['config']['modes']:
             self.grid_config['editSettings'] = self.grid_view['config'].get('editSettings', GRID_DEFAULT_EDIT_SETTINGS)
+        if self.grid_view['config'].get('content_wrap', True):
+            self.grid_config['allowTextWrap'] = True
+            self.grid_config['textWrapSettings'] = {'wrapMode': 'Content'}
+        else:
+            self.grid_config['allowTextWrap'] = False
+            self.grid_config['textWrapSettings'] = {'wrapMode': 'Header'}
         if 'Toolbar' in self.grid_view['config']['modes']:
             tb_items = []
+            self.toolbar_actions = {}
             if isinstance(toolbar_actions, list):
-                self.toolbar_actions = {}
                 for action_item in toolbar_actions:
-                    self.toolbar_actions[action_item.container_id] = action_item
+                    self.toolbar_actions[action_item['name']] = action_item
                     toolbar_item = {
-                        'id': action_item.container_id,
-                        'type': action_item.type,
-                        'text': action_item.label,
-                        'tooltipText': '',
-                        'prefixIcon': getattr(action_item, 'icon', ''),
-                        'template': f'<div id="{action_item.container_id}"></div>',
+                        'id': action_item['name'],
+                        'type': action_item['input'].type,
+                        'template': f'<div id="{action_item["input"].container_id}"></div>',
                         'align': 'Left',
                     }
+                    if action_item['input'].type == 'Input':
+                        action_item['input'].create_control()
+                        toolbar_item['template'] = action_item['input'].control
                     tb_items.append(toolbar_item)
+                print('toolbar_actions', tb_items)
             # for item_id in self.toolbar_actions.keys():
             #     toolbar_item = {
             #         'id': item_id,
@@ -313,6 +322,7 @@ class GridView:
                 GRID_DEFAULT_TOOLBAR_ITEMS
             )
             self.toolbar_items = tb_items.copy()
+            print('toolbar_items', self.toolbar_items)
         else:
             self.toolbar_items = []
         self.grid_config['toolbar'] = self.toolbar_items
@@ -333,7 +343,7 @@ class GridView:
             self.grid_config['rowSelected'] = self.row_selected
             self.grid_config['rowDeselected'] = self.row_deselected
         self.grid_config['showColumnMenu'] = True
-        self.grid_config['allowTextWrap'] = True
+        # self.grid_config['allowTextWrap'] = True
         if context_menu_items:
             self.grid_config['contextMenuItems'] = []
             for item in context_menu_items:
@@ -372,6 +382,7 @@ class GridView:
         if self.grid_height < 0:
             self.grid_height = None
         print('grid height', self.grid_height, self.container_el.offsetHeight, GRID_HEIGHT_OFFSET)
+        print('container_el', self.container_el.id)
         if self.grid_height:
             self.container_el.innerHTML = f'\
                 <div id="da-grid-container" style="height:{self.grid_height}px;">\
@@ -385,8 +396,10 @@ class GridView:
         self.grid.appendTo(jQuery(f"#{self.grid_el_id}")[0])
         if self.grid_height is None:
             print('grid height', self.grid.height, self.container_el.offsetHeight)
-            jQuery(f"#da-grid-container")[0].style.height = f'{self.container_el.offsetHeight}px'
-            print(jQuery(f"#da-grid-container")[0].style.height)
+            grid_container = self.container_el.querySelector('#da-grid-container')
+            grid_container.style.height = f'{self.container_el.offsetHeight}px'
+            # jQuery(f"#da-grid-container")[0].style.height = f'{self.container_el.offsetHeight}px'
+            # print(jQuery(f"#da-grid-container")[0].style.height)
         # print('grid height', self.grid.height, self.container_el.offsetHeight)
         # print(self.grid_el_id, anvil.js.window.document.getElementById(self.grid_el_id))
         # self.grid.appendTo(anvil.js.window.document.getElementById(f"#{self.grid_el_id}"))
@@ -416,8 +429,10 @@ class GridView:
                         f'#{self.container_id} .e-toolbar .e-toolbar-item[title="Delete"]').style.display = 'none'
 
         for action_item in self.toolbar_actions:
-            self.toolbar_actions[action_item].show()
-            self.toolbar_actions[action_item].hide()
+            if self.toolbar_actions[action_item]['input'].type != 'Input':
+                self.toolbar_actions[action_item]['input'].show()
+                if self.toolbar_actions[action_item]['selected_records']:
+                    self.toolbar_actions[action_item]['input'].hide()
         # for item_id in self.toolbar_actions.keys():
         #     item_button = ej.buttons.Button({
         #         'content': self.toolbar_actions[item_id].get('label', ''),
@@ -462,7 +477,7 @@ class GridView:
                 button.appendTo(el)
 
     def toolbar_click(self, args):
-        print('toolbar_click', args.item, args.cancel)
+        print('toolbar_click', args.item.id, args.cancel)
         if args.item.id == 'add':
             args.cancel = True
             self.add_edit_row(args=None)
@@ -476,9 +491,12 @@ class GridView:
             pass
         elif args.item.id == 'delete' and self.grid.getSelectedRecords():
             self.confirm_delete(args)
-        elif args.item.id in self.toolbar_actions and callable(self.toolbar_actions[args.item.id].action):
+        elif (args.item.id in self.toolbar_actions and self.toolbar_actions[args.item.id]['toolbar_click'] and
+              callable(self.toolbar_actions[args.item.id]['input'].action)):
             print('toolbar item', args.item.id)
-            self.toolbar_actions[args.item.id].action(args)
+            self.toolbar_actions[args.item.id]['input'].action(args)
+        else:
+            args.cancel = True
 
     def context_menu_click(self, args):
         if args.item.id in self.context_menu_actions and callable(self.context_menu_actions[args.item.id]):
@@ -491,7 +509,8 @@ class GridView:
         #             f'[id="{self.grid_el_id}-action-{item.properties.id}"]'
         #         ).style.display = 'inline-flex'
         for action_item in self.toolbar_actions:
-            self.toolbar_actions[action_item].show()
+            if self.toolbar_actions[action_item]['selected_records']:
+                self.toolbar_actions[action_item]['input'].show()
         self.grid.element.querySelector(f'.e-toolbar .e-toolbar-item[title="Delete"]').style.display = 'inline-flex'
 
     def row_deselected(self, args):
@@ -503,7 +522,8 @@ class GridView:
             #             f'[id="{self.grid_el_id}-action-{item.properties.id}"]'
             #         ).style.display = 'none'
             for action_item in self.toolbar_actions:
-                self.toolbar_actions[action_item].hide()
+                if self.toolbar_actions[action_item]['selected_records']:
+                    self.toolbar_actions[action_item]['input'].hide()
             self.grid.element.querySelector(f'.e-toolbar .e-toolbar-item[title="Delete"]').style.display = 'none'
 
     def record_click(self, args):
