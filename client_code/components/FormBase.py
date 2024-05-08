@@ -248,7 +248,7 @@ class FormBase:
             section['id'] = new_el_id()
             html_content += f'<div class="row" id="{section["id"]}"><div class="col-xs-12">'
             if 'label' in section and section['label'] is not None:
-                html_content += (f'<h5 class="{section.get("label_class", "pm-dialog-section-header")}" '
+                html_content += (f'<h5 class="{section.get("label_class", "da-dialog-section-header")}" '
                                  f'style={section.get("label_style", "")}>{section["label"]}</h5>')
             if 'rows' in section:
                 for row in section['rows']:
@@ -293,6 +293,8 @@ class FormBase:
         self.form_el.addEventListener('keypress', form_submit)
 
     def destroy(self):
+        for field in self.form_fields:
+            field.destroy()
         self.form.destroy()
         self.container_el.remove()
 

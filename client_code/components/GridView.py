@@ -233,7 +233,7 @@ class GridView:
                         'width': column.get('width', None) or GRID_DEFAULT_COLUMN_WIDTH,
                     }
                 else:
-                    print('column', column['name'])
+                    # print('column', column['name'])
                     col_attr, _ = get_model_attribute(self.model, column['name'])
                     if '.' in column['name']:
                         if col_attr.field_type == dmtypes.FieldTypes.OBJECT and col_attr.schema:
@@ -322,9 +322,9 @@ class GridView:
                 GRID_DEFAULT_TOOLBAR_ITEMS
             )
             self.toolbar_items = tb_items.copy()
-            print('toolbar_items', self.toolbar_items)
         else:
             self.toolbar_items = []
+        print('toolbar_items', self.toolbar_items)
         self.grid_config['toolbar'] = self.toolbar_items
         self.grid_config['toolbarClick'] = self.toolbar_click
         self.grid_config['toolbar'].insert(
@@ -428,11 +428,13 @@ class GridView:
                     self.grid.element.querySelector(
                         f'#{self.container_id} .e-toolbar .e-toolbar-item[title="Delete"]').style.display = 'none'
 
-        for action_item in self.toolbar_actions:
-            if self.toolbar_actions[action_item]['input'].type != 'Input':
-                self.toolbar_actions[action_item]['input'].show()
-                if self.toolbar_actions[action_item]['selected_records']:
-                    self.toolbar_actions[action_item]['input'].hide()
+        print('debug B')
+        # print('toolbar_actions', self.toolbar_actions)
+        # for action_item in self.toolbar_actions:
+        #     if self.toolbar_actions[action_item]['input'].type != 'Input':
+        #         self.toolbar_actions[action_item]['input'].show()
+        #         if self.toolbar_actions[action_item]['selected_records']:
+        #             self.toolbar_actions[action_item]['input'].hide()
         # for item_id in self.toolbar_actions.keys():
         #     item_button = ej.buttons.Button({
         #         'content': self.toolbar_actions[item_id].get('label', ''),
@@ -443,6 +445,7 @@ class GridView:
         #     self.toolbar_actions[item_id]['control'].appendTo(jQuery(f'#{self.grid_el_id}-action-{item_id}')[0])
         #     self.grid.element.querySelector(f'[id="{self.grid_el_id}-action-{item_id}"]').style.display = 'none'
 
+        print('debug C')
         if not self.grid_data and get_data:
             print('get grid data', self.filters, self.search_queries)
             self.grid_data = self.grid_class.get_grid_view(self.view_config,
@@ -490,13 +493,13 @@ class GridView:
         elif args.item.id == 'search':
             pass
         elif args.item.id == 'delete' and self.grid.getSelectedRecords():
+            args.cancel = True
             self.confirm_delete(args)
         elif (args.item.id in self.toolbar_actions and self.toolbar_actions[args.item.id]['toolbar_click'] and
               callable(self.toolbar_actions[args.item.id]['input'].action)):
             print('toolbar item', args.item.id)
-            self.toolbar_actions[args.item.id]['input'].action(args)
-        else:
             args.cancel = True
+            # self.toolbar_actions[args.item.id]['input'].action(args)
 
     def context_menu_click(self, args):
         if args.item.id in self.context_menu_actions and callable(self.context_menu_actions[args.item.id]):
