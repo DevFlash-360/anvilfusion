@@ -225,6 +225,12 @@ def get_object_by(class_name, module_name, prop, value, max_depth=None, backgrou
 
 
 @anvil.server.callable
+def get_row(class_name, module_name, uid):
+    """Return the data tables row for a given object instance"""
+    return _get_row(module_name, class_name, uid)
+
+
+@anvil.server.callable
 def fetch_objects(class_name, module_name, rows_id, page, page_length, max_depth=None, background_task_id=None):
     """Return a list of object instances from a cached data tables search"""
     # print('fetch_objects', class_name, module_name, rows_id, page, page_length, max_depth, background_task_id)
@@ -413,7 +419,7 @@ def fetch_view(class_name, module_name, columns, search_queries, filters):
     fetch_query = build_fetch_list(cols, links)
     cls = getattr(class_module, class_name)
     for key in filters:
-        if key in cls._relationships:
+        if key in cls._relationships and filters[key] is not None:
             if not isinstance(filters[key], list):
                 filters[key] = [filters[key]]
             rel_uids = [row['uid'] for row in filters[key]]
@@ -486,8 +492,13 @@ def save_object(instance, audit, background_task_id=None):
         for name, relationship in instance._relationships.items()
         if relationship.with_many and getattr(instance, name) is not None
     }
+    none_relationships = {
+        name: None
+        for name, relationship in instance._relationships.items()
+        if getattr(instance, name) is None
+    }
 
-    members = {**attributes, **single_relationships, **multi_relationships}
+    members = {**attributes, **single_relationships, **multi_relationships, **none_relationships}
     cross_references = [
         {"name": name, "relationship": relationship}
         for name, relationship in instance._relationships.items()
