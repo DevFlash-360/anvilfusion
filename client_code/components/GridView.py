@@ -5,7 +5,7 @@ from . import FormBase
 from ..tools.utils import AppEnv, camel_to_title
 import string
 import uuid
-import time
+import json
 
 GRID_TOOLBAR_COMMAND_ADD = {'id': 'add', 'text': '', 'prefixIcon': 'e-add', 'tooltipText': 'Add', 'align': 'Right'}
 GRID_TOOLBAR_COMMAND_DELETE = {'id': 'delete', 'text': '', 'prefixIcon': 'e-delete', 'tooltipText': 'Delete',
@@ -147,6 +147,7 @@ class GridView:
         self.context_menu_actions = {}
         self.grid_data = data or []
         self.grid_el_id = uuid.uuid4()
+        self.grid_column_indexes = None
 
         print('GridView', view_name, model)
 
@@ -252,6 +253,7 @@ class GridView:
                         'disableHtmlEncode': column.get('disable_html_encode', True),
                         'width': column.get('width', None) or GRID_DEFAULT_COLUMN_WIDTH,
                         'visible': column.get('visible', True),
+                        'allowGrouping': column.get('allow_grouping', True),
                         # 'valueAccessor': self.format_value,
                         # 'formatter': self.get_value,
                         # def get_value(column, data):
@@ -305,7 +307,7 @@ class GridView:
                         action_item['input'].create_control()
                         toolbar_item['template'] = action_item['input'].control
                     tb_items.append(toolbar_item)
-                print('toolbar_actions', tb_items)
+                # print('toolbar_actions', tb_items)
             # for item_id in self.toolbar_actions.keys():
             #     toolbar_item = {
             #         'id': item_id,
@@ -324,7 +326,7 @@ class GridView:
             self.toolbar_items = tb_items.copy()
         else:
             self.toolbar_items = []
-        print('toolbar_items', self.toolbar_items)
+        # print('toolbar_items', self.toolbar_items)
         self.grid_config['toolbar'] = self.toolbar_items
         self.grid_config['toolbarClick'] = self.toolbar_click
         self.grid_config['toolbar'].insert(
@@ -337,7 +339,19 @@ class GridView:
         if 'Selection' in self.grid_view['config']['modes']:
             self.grid_config['selectionSettings'] = GRID_DEFAULT_SELECTION_SETTINGS
             self.grid_config['columns'].insert(0,
-                                               {'type': 'checkbox', 'lockColumn': True,  # type: ignore
+                                               {'type': 'checkbox',
+                                                'field': '_selected',
+                                                'lockColumn': True,
+                                                'headerText': '',
+                                                'allowSorting': False,
+                                                'allowFiltering': False,
+                                                'allowEditing': False,
+                                                'allowResizing': False,
+                                                'allowReordering': False,
+                                                'showColumnMenu': False,
+                                                'showInColumnChooser': False,
+                                                'visible': True,
+
                                                 'width': GRID_DEFAULT_SELECTION_SETTINGS['checkboxWidth']}
                                                )
             self.grid_config['rowSelected'] = self.row_selected
@@ -360,13 +374,14 @@ class GridView:
         self.grid_config['actionBegin'] = self.grid_action_handler
         self.grid_config['actionComplete'] = self.grid_action_handler
         self.grid_config['queryCellInfo'] = self.query_cell_info
+        # self.grid_config['allowGrouping'] = True
         # self.grid_config['recordClick'] = self.record_click
         # self.grid_config['rowSelecting'] = lambda args: print('rowSelecting', args)
         # self.grid_config['rowSelected'] = lambda args: print('rowSelected', args)
 
         # create Grid control
+        # print('\nGrid config\n', self.grid_config, '\n')
         self.grid = ej.grids.Grid(self.grid_config)
-        # print('\nGrid config\n', json.dumps(self.grid_config), '\n')
 
     @staticmethod
     def format_value(col, row, cell):
@@ -374,29 +389,30 @@ class GridView:
 
     # get Grid data and refresh the view
     def form_show(self, get_data=True, **args):
-        print('show grid')
+        print('show grid', 'get_data', get_data)
         # try:
         # print('\nGrid data source\n', self.grid.dataSource, '\n')
+        self.grid_column_indexes = {col.get('field'): i for i, col in enumerate(self.grid.columns)}
         self.container_el = jQuery(f"#{self.container_id}")[0]
         self.grid_height = self.container_el.offsetHeight - GRID_HEIGHT_OFFSET
         if self.grid_height < 0:
             self.grid_height = None
-        print('grid height', self.grid_height, self.container_el.offsetHeight, GRID_HEIGHT_OFFSET)
+        print('grid height A', self.grid_height, self.container_el.offsetHeight, GRID_HEIGHT_OFFSET)
         print('container_el', self.container_el.id)
         if self.grid_height:
             self.container_el.innerHTML = f'\
-                <div id="da-grid-container" style="height:{self.grid_height}px;">\
+                <div id="da-grid-container-{self.grid_el_id}" style="height:{self.grid_height}px;">\
                     <div id="{self.grid_el_id}"></div>\
                 </div>'
         else:
             self.container_el.innerHTML = f'\
-                <div id="da-grid-container">\
+                <div id="da-grid-container-{self.grid_el_id}">\
                     <div id="{self.grid_el_id}"></div>\
                 </div>'
         self.grid.appendTo(jQuery(f"#{self.grid_el_id}")[0])
         if self.grid_height is None:
-            print('grid height', self.grid.height, self.container_el.offsetHeight)
-            grid_container = self.container_el.querySelector('#da-grid-container')
+            print('grid height B', self.grid.height, self.container_el.offsetHeight)
+            grid_container = self.container_el.querySelector(f'#da-grid-container-{self.grid_el_id}')
             grid_container.style.height = f'{self.container_el.offsetHeight}px'
             # jQuery(f"#da-grid-container")[0].style.height = f'{self.container_el.offsetHeight}px'
             # print(jQuery(f"#da-grid-container")[0].style.height)
@@ -514,7 +530,8 @@ class GridView:
         for action_item in self.toolbar_actions:
             if self.toolbar_actions[action_item]['selected_records']:
                 self.toolbar_actions[action_item]['input'].show()
-        self.grid.element.querySelector(f'.e-toolbar .e-toolbar-item[title="Delete"]').style.display = 'inline-flex'
+        if self.grid.editSettings.allowDeleting:
+            self.grid.element.querySelector(f'.e-toolbar .e-toolbar-item[title="Delete"]').style.display = 'inline-flex'
 
     def row_deselected(self, args):
         # print('row_deselected', args)
@@ -548,7 +565,10 @@ class GridView:
     def add_edit_row(self, args=None, form_data=None, data_row=None):
         # print('add_edit_row', args, form_data)
         if args is not None and args.requestType == 'beginEdit':
-            form_action = 'edit'
+            if self.edit_mode == 'view':
+                form_action = 'view'
+            else:
+                form_action = 'edit'
             if args.rowData.uid and 'grid' not in args.rowData.uid and not data_row:
                 instance = self.grid_class.get(args.rowData.uid)
                 print(args.rowData.uid, instance)

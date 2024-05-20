@@ -45,6 +45,7 @@ class BaseInput:
                  save=True,
                  enabled=True,
                  el_id=None,
+                 el_style=None,
                  container_id=None,
                  on_change=None,
                  is_dependent=False,
@@ -61,6 +62,7 @@ class BaseInput:
         self.col_class = col_class
         self.col_style = col_style
         self.css_class = css_class
+        self.el_style = el_style
         self._value = value
         self.save = save
         self.is_dependent = is_dependent
@@ -191,13 +193,15 @@ class BaseInput:
         return self.edit_el
 
     def grid_edit_read(self, input_element, input_value):
-        return self.control.value
+        if self._control is not None:
+            return self.control.value
 
     def grid_edit_write(self, args):
         self.create_control()
-        self.control.appendTo(self.edit_el)
-        if args.column.field in args.rowData:
-            self.control.value = args.rowData[args.column.field]
+        if self.control is not None:
+            self.control.appendTo(self.edit_el)
+            if args.column.field in args.rowData:
+                self.control.value = args.rowData[args.column.field]
 
     def grid_edit_destroy(self):
         pass
@@ -327,6 +331,56 @@ class HiddenInput(BaseInput):
         self._value = value
 
 
+class SectionSubtitle(BaseInput):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.save = False
+        if self.css_class is None:
+            self.css_class = 'da-dialog-section-header'
+        self.html = f'<h5 id="{self.el_id}" class="{self.css_class}" style={self.el_style}>{self.value}</h5>'
+
+    def create_control(self):
+        pass
+
+    def destroy(self):
+        pass
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        self._value = value
+        anvil.js.window.document.getElementById(self.el_id).innerHTML = self._value
+
+
+class ContentFrame(BaseInput):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.save = False
+        if self.css_class is None:
+            self.css_class = 'da-dialog-section-header'
+        if self.el_style is None:
+            self.el_style = ''
+        self.html = f'<div id="{self.el_id}" class="{self.css_class}" style={self.el_style}>{self.value}</div>'
+
+    def create_control(self):
+        pass
+
+    def destroy(self):
+        pass
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        self._value = value
+        anvil.js.window.document.getElementById(self.el_id).innerHTML = self._value
+
+
 # Single line text input
 class TextInput(BaseInput):
     def __init__(self, input_type='text', **kwargs):
@@ -336,7 +390,7 @@ class TextInput(BaseInput):
 
         self.html = f'\
             <div class="form-group pm-form-group">\
-                <input type="text" class="form-control" id="{self.el_id}" name="{self.el_id}">\
+                <input type="text" class="form-control {self.css_class}" id="{self.el_id}" name="{self.el_id}">\
             </div>'
 
     def create_control(self):
@@ -375,10 +429,11 @@ class MultiLineInput(BaseInput):
     def __init__(self, rows=2, **kwargs):
         super().__init__(**kwargs)
 
-        self.html = f'\
+        self.html = (f'\
             <div class="form-group pm-form-group">\
-                <textarea class="form-control" id="{self.el_id}" name="{self.el_id}" rows="{rows}"></textarea>\
-            </div>'
+                <textarea class="form-control {self.css_class}" id="{self.el_id}" name="{self.el_id}" rows="{rows}">\
+                </textarea>\
+            </div>')
 
     def create_control(self):
         self.control = ej.inputs.TextBox({'placeholder': self.placeholder})
