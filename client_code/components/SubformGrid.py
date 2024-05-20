@@ -135,7 +135,7 @@ class SubformGrid(BaseInput, GridView):
     @value.setter
     def value(self, value):
         print('set subformgrid value', value)
-        if value and value.uid:
+        if value and getattr(value, 'uid', None):
             print('value not empty', value.uid)
             # print(self.subform_grid_view)
             self._value = value
@@ -153,6 +153,7 @@ class SubformGrid(BaseInput, GridView):
                 self.grid.dataSource = self.grid_data
                 # print('subformgrid data', self.filters, self.grid_data)
         elif value:
+            print('row list', len(value))
             self.grid_data = value
             self.grid.dataSource = self.grid_data
         else:
