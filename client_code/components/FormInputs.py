@@ -1,6 +1,4 @@
 # Form input fields and controls
-import uuid
-
 import anvil.js
 from anvil import BlobMedia
 from anvil.js.window import jQuery, ej, FileReader, Uint8Array, Event
@@ -8,6 +6,8 @@ from ..datamodel.types import FieldTypes
 from ..datamodel.particles import ModelTypeBase
 from ..tools.utils import AppEnv, DotDict, new_el_id, label_to_id
 import datetime
+import time
+import uuid
 
 
 # Implemented form input field control classes
@@ -38,6 +38,7 @@ class BaseInput:
                  float_label=True,
                  shadow_label=False,
                  placeholder=None,
+                 inplace_mode=None,
                  col_class=None,
                  col_style=None,
                  css_class=None,
@@ -59,6 +60,7 @@ class BaseInput:
         self.shadow_label = f'<div class="da-form-input-shadow-label">{label}</div>' if shadow_label is True else ''
         self.float_label = float_label
         self.placeholder = placeholder or self.label
+        self.inplace_mode = inplace_mode
         self.col_class = col_class
         self.col_style = col_style
         self.css_class = css_class
@@ -80,10 +82,13 @@ class BaseInput:
         self.grid_data = None
         self.edit_el = None
 
-        self.html = f'\
-            <div class="form-group da-form-group">\
-                <input class="form-control" id="{self.el_id}" name="{self.el_id}">\
-            </div>'
+        if self.inplace_mode is not None:
+            self.html = f'<div id="{self.el_id}"></div>'
+        else:
+            self.html = f'\
+                <div class="form-group da-form-group">\
+                    <input class="form-control da-form-group" id="{self.el_id}" name="{self.el_id}">\
+                </div>'
 
     @property
     def grid_column(self):
@@ -159,8 +164,16 @@ class BaseInput:
             label_el = anvil.js.window.document.getElementById(f'label_{self.el_id}')
             label_el.innerHTML += '<span style="color:red;!important"> *</span>'
 
-    def create_control(self):
-        pass
+    def create_control(self, **kwargs):
+        if self.inplace_mode is not None:
+            self.control = ej.inplaceeditor.InPlaceEditor({
+                'mode': self.inplace_mode,
+                'type': kwargs['control_type'],
+                'model': kwargs['model'],
+                'primaryKey': kwargs.get('primaryKey', ''),
+                'name': kwargs.get('name', ''),
+                'emptyText': self.placeholder or '',
+            })
 
     def show(self):
         if not self.visible:
@@ -231,24 +244,6 @@ class Button(BaseInput):
             'isPrimary': True if self.is_primary else False,
         })
 
-    # def show(self):
-    #     super().show()
-        # self.control.element.onclick = self.action
-    #     if not self.visible:
-    #         if self._control is None:
-    #             anvil.js.window.document.getElementById(self.container_id).innerHTML = self.html
-    #             self.create_control()
-    #             self.control.appendTo(f"#{self.el_id}")
-    #         else:
-    #             anvil.js.window.document.getElementById(self.container_id).style.display = 'inline-flex'
-    #         self.value = self._value
-    #         self.visible = True
-    #
-    # def hide(self):
-    #     if self.visible:
-    #         self.visible = False
-    #         anvil.js.window.document.getElementById(self.container_id).style.display = 'none'
-
     def destroy(self):
         pass
 
@@ -292,7 +287,6 @@ class DropdownButton(Button):
         super().__init__(**kwargs)
         self.type = 'Input'
         self.options = options
-        # self.html = f'<div id="{self.el_id}" name="{self.el_id}">{self.content}</div>'
 
     def create_control(self):
         self.control = ej.splitbuttons.DropDownButton({
@@ -388,40 +382,49 @@ class TextInput(BaseInput):
         self.input_type = input_type
         self.element = None
 
-        self.html = f'\
-            <div class="form-group pm-form-group">\
-                <input type="text" class="form-control {self.css_class}" id="{self.el_id}" name="{self.el_id}">\
-            </div>'
+        if self.inplace_mode is None:
+            self.html = f'\
+                <div class="form-group da-form-group">\
+                    <input type="text" class="form-control {self.css_class}" id="{self.el_id}" name="{self.el_id}">\
+                </div>'
 
     def create_control(self):
-        self.control = ej.inputs.TextBox({
-            'placeholder': self.placeholder,
-            'type': self.input_type,
-        })
+        if self.inplace_mode is not None:
+            model = {
+                'type': self.input_type,
+                'placeholder': self.placeholder,
+            }
+            super().create_control(control_type='Text', model=model)
+        else:
+            self.control = ej.inputs.TextBox({
+                'placeholder': self.placeholder,
+                'type': self.input_type,
+            })
 
     def show(self):
         super().show()
+        self.element = anvil.js.window.document.getElementById(self.el_id)
         if self.input_type == 'tel':
-            self.element = anvil.js.window.document.getElementById(self.el_id)
             self.control.addEventListener('input', self.format_phone_number)
 
     # @staticmethod
     def format_phone_number(self, args):
-        input_value = "".join(filter(str.isdigit, self.element.value))
-        print(input_value)
-        if input_value:
-            print('debug')
-            input_value = input_value[:10]
-            formatted_value = ""
-            if len(input_value) > 0:
-                formatted_value = "(" + input_value[:3]
-            if len(input_value) > 3:
-                formatted_value += ") " + input_value[3:6]
-            if len(input_value) > 6:
-                formatted_value += "-" + input_value[6:]
-            self.element.value = formatted_value
-        else:
-            self.element.value = input_value
+        if isinstance(self.element.value, str):
+            input_value = "".join(filter(str.isdigit, self.element.value))
+            print(input_value)
+            if input_value:
+                print('debug')
+                input_value = input_value[:10]
+                formatted_value = ""
+                if len(input_value) > 0:
+                    formatted_value = "(" + input_value[:3]
+                if len(input_value) > 3:
+                    formatted_value += ") " + input_value[3:6]
+                if len(input_value) > 6:
+                    formatted_value += "-" + input_value[6:]
+                self.element.value = formatted_value
+            else:
+                self.element.value = input_value
 
 
 # Multi line text input
@@ -429,14 +432,23 @@ class MultiLineInput(BaseInput):
     def __init__(self, rows=2, **kwargs):
         super().__init__(**kwargs)
 
-        self.html = (f'\
-            <div class="form-group pm-form-group">\
-                <textarea class="form-control {self.css_class}" id="{self.el_id}" name="{self.el_id}" rows="{rows}">\
-                </textarea>\
-            </div>')
+        if self.inplace_mode is None:
+            self.html = (f'\
+                <div class="form-group pm-form-group">\
+                    <textarea class="form-control {self.css_class}" id="{self.el_id}" name="{self.el_id}" rows="{rows}">\
+                    </textarea>\
+                </div>')
 
     def create_control(self):
-        self.control = ej.inputs.TextBox({'placeholder': self.placeholder})
+        if self.inplace_mode is not None:
+            model = {
+                'type': 'Text',
+                'placeholder': self.placeholder,
+                'multiline': True
+            }
+            super().create_control(control_type='Text', model=model)
+        else:
+            self.control = ej.inputs.TextBox({'placeholder': self.placeholder})
 
 
 # Number input
@@ -449,11 +461,19 @@ class NumberInput(BaseInput):
         self.grid_column['format'] = 'C2'
 
     def create_control(self):
-        self.control = ej.inputs.NumericTextBox({
-            'placeholder': self.placeholder,
-            'showSpinButton': False,
-            'format': self.number_format,
-        })
+        if self.inplace_mode is not None:
+            model = {
+                'placeholder': self.placeholder,
+                'showSpinButton': False,
+                'format': self.number_format,
+            }
+            super().create_control(control_type='Numeric', model=model)
+        else:
+            self.control = ej.inputs.NumericTextBox({
+                'placeholder': self.placeholder,
+                'showSpinButton': False,
+                'format': self.number_format,
+            })
 
 
 # Date picker input
@@ -462,10 +482,18 @@ class DateInput(BaseInput):
         super().__init__(**kwargs)
         self.string_format = string_format or 'dd-MM-yyyy'
         self.grid_column['type'] = 'date'
-        self.grid_column['format'] = {'type': 'date', 'format': 'dd-MM-yyyy'}
+        self.grid_column['format'] = {'type': 'date', 'format': self.string_format}
 
     def create_control(self):
-        self.control = ej.calendars.DatePicker({'placeholder': self.placeholder, 'format': self.string_format})
+        if self.inplace_mode is not None:
+            model = {
+                'type': 'Date',
+                'placeholder': self.placeholder,
+                'format': self.string_format,
+            }
+            super().create_control(control_type='Date', model=model)
+        else:
+            self.control = ej.calendars.DatePicker({'placeholder': self.placeholder, 'format': self.string_format})
 
     @property
     def value(self):
@@ -502,10 +530,18 @@ class DateTimeInput(BaseInput):
         super().__init__(**kwargs)
         self.string_format = string_format or 'dd-MM-yyyy hh:mm a'
         self.grid_column['type'] = 'dateTime'
-        self.grid_column['format'] = {'type': 'dateTime', 'format': 'dd-MM-yyyy hh:mm a'}
+        self.grid_column['format'] = {'type': 'dateTime', 'format': self.string_format}
 
     def create_control(self):
-        self.control = ej.calendars.DateTimePicker({'placeholder': self.placeholder, 'format': self.string_format})
+        if self.inplace_mode is not None:
+            model = {
+                'type': 'DateTime',
+                'placeholder': self.placeholder,
+                'format': self.string_format,
+            }
+            super().create_control(control_type='Date', model=model)
+        else:
+            self.control = ej.calendars.DateTimePicker({'placeholder': self.placeholder, 'format': self.string_format})
 
     @property
     def value(self):
@@ -540,11 +576,20 @@ class TimeInput(BaseInput):
     def __init__(self, string_format=None, **kwargs):
         super().__init__(**kwargs)
 
+        self.string_format = string_format or 'hh:mm a'
         self.grid_column['type'] = 'dateTime'
         self.grid_column['format'] = {'type': 'dateTime', 'format': 'hh:mm a'}
 
     def create_control(self):
-        self.control = ej.calendars.TimePicker({'placeholder': self.placeholder, 'format': 'hh:mm a'})
+        if self.inplace_mode is not None:
+            model = {
+                'type': 'Time',
+                'placeholder': self.placeholder,
+                'format': self.string_format,
+            }
+            super().create_control(control_type='Date', model=model)
+        else:
+            self.control = ej.calendars.TimePicker({'placeholder': self.placeholder, 'format': self.string_format})
 
     @property
     def value(self):
@@ -582,9 +627,9 @@ class CheckboxInput(BaseInput):
         super().__init__(**kwargs)
 
         self.html = f'\
-      <div class="form-group pm-form-group">\
-        <input type="checkbox" class="form-control da-checkbox-input" id="{self.el_id}" name="{self.el_id}">\
-      </div>'
+            <div class="form-group pm-form-group">\
+                <input type="checkbox" class="form-control da-checkbox-input" id="{self.el_id}" name="{self.el_id}">\
+            </div>'
 
         self.grid_column['type'] = 'boolean'
         self.grid_column['displayAsCheckBox'] = True
@@ -690,7 +735,10 @@ class DropdownInput(BaseInput):
         self.select = select
         self.add_el_id = None
         self.value_field = value_field
+        self.text_field = text_field
         if isinstance(options, list) and options != [] and isinstance(options[0], str):
+            self.value_field = 'value'
+            self.text_field = 'text'
             self.fields = {'text': 'text', 'value': 'value'}
             self._options = [{'text': option, 'value': option} for option in options]
         else:
@@ -699,37 +747,77 @@ class DropdownInput(BaseInput):
         super().__init__(**kwargs)
 
     def create_control(self):
-        if self.select == 'single':
-            self.control = ej.dropdowns.DropDownList({
-                'placeholder': self.placeholder,
-                'cssClass': self.css_class,
-                'showClearButton': False if self.required else True,
-                'fields': self.fields,
-                'dataSource': self.options,
-                'allowFiltering': True,
+        if self.inplace_mode is not None:
+            control_type = 'DropDownList' if self.select == 'single' else 'MultiSelect'
+            self.control = ej.inplaceeditor.InPlaceEditor({
+                'mode': self.inplace_mode,
+                'type': control_type,
+                'model': {
+                    'placeholder': self.placeholder,
+                    'emptyText': self.placeholder,
+                    'cssClass': self.css_class,
+                    'showClearButton': False if self.required else True,
+                    'showDropDownIcon': True if self.select == 'multi' else False,
+                    'fields': self.fields,
+                    'dataSource': self.options,
+                    'allowFiltering': True,
+                },
+                'primaryKey': self.value_field,
+                'name': self.text_field,
+                'value': '',
+                'valueTemplate': f'<span>${{{self.text_field}}}</span>',
+                'emptyText': self.placeholder or '',
+                'created': self.created,
             })
-        elif self.select == 'multi':
-            self.control = ej.dropdowns.MultiSelect({
-                'placeholder': self.placeholder,
-                'cssClass': self.css_class,
-                'showClearButton': False if self.required else True,
-                'fields': self.fields,
-                'dataSource': self.options,
-                'showDropDownIcon': True,
-                'allowFiltering': True,
-            })
+
+        else:
+            if self.select == 'single':
+                self.control = ej.dropdowns.DropDownList({
+                    'placeholder': self.placeholder,
+                    'cssClass': self.css_class,
+                    'showClearButton': False if self.required else True,
+                    'fields': self.fields,
+                    'dataSource': self.options,
+                    'allowFiltering': True,
+                })
+            elif self.select == 'multi':
+                self.control = ej.dropdowns.MultiSelect({
+                    'placeholder': self.placeholder,
+                    'cssClass': self.css_class,
+                    'showClearButton': False if self.required else True,
+                    'fields': self.fields,
+                    'dataSource': self.options,
+                    'showDropDownIcon': True,
+                    'allowFiltering': True,
+                })
 
     @property
     def value(self):
         if self._control and self.control.value is not None:
-            self._value = self.control.value
+            if self.inplace_mode is None:
+                self._value = self.control.value
+            else:
+                if 'compPrevValue' in self.control:
+                    self._value = self.control.compPrevValue
+                else:
+                    self._value = self.control.value
         return self._value
 
     @value.setter
     def value(self, value):
         self._value = value
         if self._control is not None:
-            self.control.value = value
+            if self.inplace_mode is None:
+                self.control.value = value
+            elif self.inplace_mode is not None and self.visible:
+                value_text = next((item[self.text_field] for item in self.options
+                                   if item[self.value_field] == value), '')
+                el = self.control.element.querySelector('.e-editable-value')
+                self.control.value = value
+                while True:
+                    if el.innerHTML == value:
+                        el.innerHTML = value_text
+                        break
 
     @property
     def options(self):
@@ -744,6 +832,11 @@ class DropdownInput(BaseInput):
         if self._control is not None:
             self.control.dataSource = options
 
+    def created(self, args):
+        if self.control is not None:
+            # time.sleep(0.05)
+            self.value = self._value
+
 
 # Lookup input (dropdown with options from a model)
 class LookupInput(DropdownInput):
@@ -753,7 +846,7 @@ class LookupInput(DropdownInput):
                  add_item=False, inline_grid=False,
                  **kwargs):
         self.model = model
-        self.text_field = text_field or getattr(AppEnv.data_models, self.model)._title
+        self.text_field = text_field or getattr(AppEnv.data_models, self.model)._title if self.model else 'name'
         self.compute_option = compute_option
         self.add_item = add_item
         self.add_item_label = add_item_label or 'Add Item'
@@ -826,9 +919,15 @@ class LookupInput(DropdownInput):
     def value(self):
         if self._control and self.control.value is not None:
             if self.select == 'single':
-                self._value = self.control.getDataByValue(self.control.value)
+                if self.inplace_mode is None:
+                    self._value = self.control.getDataByValue(self.control.value)
+                else:
+                    self._value = self.control.model.getDataByValue(self.control.value)
             else:
-                self._value = [self.control.getDataByValue(item) for item in self.control.value]
+                if self.inplace_mode is None:
+                    self._value = [self.control.getDataByValue(item) for item in self.control.value]
+                else:
+                    self._value = [self.control.model.getDataByValue(item) for item in self.control.value]
         return self._value
 
     @value.setter
@@ -894,9 +993,9 @@ class SignatureInput(BaseInput):
         canvas_height = f'height:{self.height};' if self.height is not None else ''
         canvas_width = f'width:{self.width};' if self.width is not None else ''
         self.html = f'<div id="parent-{self.el_id}">\
-      <div class="form-group pm-form-group" style="{canvas_height}{canvas_width}">{self.label}<br>\
-        <canvas class="form-control" style="height:100%;width:100%;" id="{self.el_id}" name="{self.el_id}"></canvas>\
-      </div></div>'
+            <div class="form-group da-form-group" style="{canvas_height}{canvas_width}">{self.label}<br>\
+                <canvas class="form-control" style="height:100%;width:100%;" id="{self.el_id}" name="{self.el_id}"></canvas>\
+            </div></div>'
 
     def create_control(self):
         self.control = ej.inputs.Signature({'placeholder': self.placeholder})
