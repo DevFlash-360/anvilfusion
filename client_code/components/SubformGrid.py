@@ -20,6 +20,7 @@ class SubformGrid(BaseInput, GridView):
                  schema=None,
                  data=None,
                  view_config=None,
+                 get_data=False,
                  edit_mode='dialog',
                  **kwargs):
 
@@ -88,6 +89,7 @@ class SubformGrid(BaseInput, GridView):
         self.link_model = link_model
         self.link_field = link_field
         self.data = data
+        self.get_data = get_data
         self.html = f'<div><p>Subform Grid</p></div><div id="{self.el_id}"></div>'
         self.form_data = form_data
         self.is_dependent = True if link_model and link_field else is_dependent
@@ -175,7 +177,7 @@ class SubformGrid(BaseInput, GridView):
                 self.grid.element.style.display = 'block'
                 self.grid.refresh()
             else:
-                GridView.form_show(self, get_data=False)
+                GridView.form_show(self, get_data=self.get_data)
 
 
     def hide(self):

@@ -5,6 +5,7 @@ from importlib import import_module
 from anvil.tables import app_tables
 import anvil.secrets
 import uuid
+import datetime
 
 
 @anvil.server.callable
@@ -25,24 +26,39 @@ def init_user_session(user_email=None, password=None):
     anvil.server.session['user_name'] = user_name.strip()
     anvil.server.session['user_email'] = user_dict['email']
     anvil.server.session['user_permissions'] = user_dict.get('permissions') or {}
+    locked_tenant = anvil.server.session['user_permissions'].get('locked_tenant', False)
     tenant_row = app_tables.tenants.get(uid=user_dict['tenant_uid'])
     tenant_uid = ''
     tenant_name = ''
+    app_mode = ''
     if anvil.server.session['user_permissions'].get('super_admin', False):
         tenant_uid = '00000000-0000-0000-0000-000000000000'
-        tenant_name = 'Super Admin'
-        anvil.server.session['tenant_uid'] = '00000000-0000-0000-0000-000000000000'
-        anvil.server.session['tenant_name'] = 'Super Admin'
-    if (not anvil.server.session['user_permissions'].get('super_admin', False)
-            or anvil.server.session['user_permissions'].get('locked_tenant', False)):
+        tenant_name = ''
+        app_mode = 'Super Admin Mode'
+        # anvil.server.session['tenant_uid'] = '00000000-0000-0000-0000-000000000000'
+        # anvil.server.session['tenant_name'] = ''
+    elif anvil.server.session['user_permissions'].get('developer', False):
+        tenant_uid = '00000000-0000-0000-0000-000000000000'
+        tenant_name = ''
+        app_mode = 'Developer Mode'
+    if app_mode == '' or locked_tenant:
         tenant_uid = tenant_row['uid']
-        tenant_name += f": {tenant_row['name']}" if tenant_name else tenant_row['name']
-        tenant_row = app_tables.tenants.get(uid=user_dict['tenant_uid'])
+        tenant_name = tenant_row['name']
+    # if (not anvil.server.session['user_permissions'].get('super_admin', False)
+    #         or anvil.server.session['user_permissions'].get('locked_tenant', False)):
+    #     tenant_uid = tenant_row['uid']
+    #     tenant_name += f": {tenant_row['name']}" if tenant_name else tenant_row['name']
+    #     tenant_row = app_tables.tenants.get(uid=user_dict['tenant_uid'])
     anvil.server.session['tenant_uid'] = tenant_uid
     anvil.server.session['tenant_name'] = tenant_name
+    anvil.server.session['account_name'] = tenant_name
+    anvil.server.session['data_files'] = [{'uid': tenant_uid, 'name': tenant_row['name']}]
+    anvil.server.session['app_mode'] = app_mode
+    anvil.server.session['locked_tenant'] = locked_tenant
 
     save_logged_user()
-    return get_logged_user()
+    logged_user = get_logged_user()
+    return logged_user
 
 
 def save_logged_user(current_user=None):
@@ -55,6 +71,10 @@ def save_logged_user(current_user=None):
             'email': anvil.server.session['user_email'],
             'timezone': anvil.server.session['user_timezone'],
             'permissions': anvil.server.session['user_permissions'],
+            'account_name': anvil.server.session['account_name'],
+            'data_files': anvil.server.session['data_files'],
+            'app_mode': anvil.server.session['app_mode'],
+            'locked_tenant': anvil.server.session['locked_tenant'],
         }
     else:
         logged_user = current_user.copy()
@@ -65,6 +85,10 @@ def save_logged_user(current_user=None):
         anvil.server.session['user_email'] = logged_user['email']
         anvil.server.session['user_timezone'] = logged_user['timezone']
         anvil.server.session['user_permissions'] = logged_user['permissions']
+        anvil.server.session['account_name'] = logged_user['account_name']
+        anvil.server.session['data_files'] = logged_user['data_files']
+        anvil.server.session['app_mode'] = logged_user['app_mode'],
+        anvil.server.session['locked_tenant'] = logged_user['locked_tenant']
     anvil.server.session['logged_user'] = logged_user
     try:
         anvil.server.cookies.local['logged_user'] = logged_user
@@ -95,6 +119,16 @@ def get_logged_user(background_task_id=None):
             except anvil.server.CookieError:
                 logged_user = {}
     return logged_user.copy()
+
+
+@anvil.server.callable
+def set_current_tenant(tenant_uid=None):
+    user = anvil.users.get_user()
+    user_row = app_tables.users.get(uid=user['uid'])
+    user_row.update(tenant_uid=tenant_uid)
+    anvil.server.session['tenant_uid'] = tenant_uid
+    init_user_session()
+    return get_logged_user()
 
 
 @anvil.server.callable

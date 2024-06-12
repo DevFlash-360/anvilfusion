@@ -30,6 +30,7 @@ def caching_query(search_function):
         # print('caching_query', search_args)
         logged_user = get_logged_user(background_task_id=background_task_id)
         user_permissions = get_user_permissions(logged_user=logged_user)
+        all_tenants = False
         for arg in search_args:
             if '_model_type' in type(search_args[arg]).__dict__:
                 ref_obj = search_args[arg]
@@ -40,6 +41,12 @@ def caching_query(search_function):
         if (user_permissions['super_admin'] and not user_permissions['locked_tenant']
                 and search_args['tenant_uid'] != SYSTEM_TENANT_UID):
             search_args.pop('tenant_uid', None)
+        if user_permissions['super_admin'] and search_args['tenant_uid'] is None:
+            search_args.pop('tenant_uid', None)
+            all_tenants = True
+        if user_permissions['developer'] and search_args['tenant_uid'] is None:
+            search_args.pop('tenant_uid', None)
+            all_tenants = True
         search_query = search_args.pop('search_query', None)
         table = get_table(module_name, class_name)
         if isinstance(search_query, list):
@@ -49,6 +56,7 @@ def caching_query(search_function):
         else:
             length = len(table.search(**search_args))
         search_args['search_query'] = search_query
+        search_args['all_tenants'] = all_tenants
         if with_class_name:
             search_args["class_name"] = class_name
         rows_id = str(uuid4())
@@ -152,6 +160,11 @@ def _search_rows(module_name, class_name, uids, background_task_id=None):
         else:
             if user_permissions['locked_tenant']:
                 search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
+    elif user_permissions['super_admin'] and search_args['tenant_uid'] is None:
+        search_args.pop('tenant_uid', None)
+    elif user_permissions['developer'] and search_args['tenant_uid'] is None:
+        search_args.pop('tenant_uid', None)
+    print('_search_rows search_args', search_args)
     return get_table(module_name, class_name).search(**search_args)
 
 
@@ -246,9 +259,11 @@ def fetch_objects(class_name, module_name, rows_id, page, page_length, max_depth
             else:
                 if user_permissions['locked_tenant']:
                     search_definition['tenant_uid'] = logged_user.get('tenant_uid', None)
+        if search_definition.get('all_tenants', False):
+            search_definition.pop('tenant_uid', None)
+        search_definition.pop('all_tenants', None)
         class_name = search_definition.pop("class_name")
         search_query = search_definition.pop("search_query", None)
-        # print('search_definition 2', search_definition)
         if isinstance(search_query, list):
             rows = get_table(module_name, class_name).search(*search_query, **search_definition)
         elif search_query is not None:
