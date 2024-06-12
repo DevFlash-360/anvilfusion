@@ -45,6 +45,8 @@ class FormBase:
                  source=None,
                  width=POPUP_WIDTH_COL1,
                  height='auto',
+                 css_class=None,
+                 tabs_config=None,
                  validation=None,
                  ):
         print('Base Form', model)
@@ -81,7 +83,7 @@ class FormBase:
             self.form_content = f'<form id="{self.form_id}">{content}</form>'
 
         elif tabs is not None:
-            self.form_content, self.form_fields, self.form_tabs = self.tabs_content(tabs)
+            self.form_content, self.form_fields, self.form_tabs = self.tabs_content(tabs, tabs_config or {})
 
         elif sections is not None:
             self.form_content, self.form_fields = self.sections_content(sections)
@@ -112,7 +114,7 @@ class FormBase:
             'visible': False,
             'position': {'X': 'center', 'Y': '100'},
             'animationSettings': {'effect': 'Zoom'},
-            'cssClass': 'e-fixed py-dialog',
+            'cssClass': f'e-fixed {css_class}',
             'open': self.form_open,
             'close': self.form_cancel,
             'beforeOpen': self.before_open,
@@ -139,7 +141,7 @@ class FormBase:
             ]
             form_config['showCloseIcon'] = False
         self.form = ej.popups.Dialog(form_config)
-        self.form.cssClass = 'e-fixed py-dialog'
+        # self.form.cssClass = 'e-fixed py-dialog'
         self.form.appendTo(self.container_el)
 
         if self.form_tabs is not None:
@@ -164,15 +166,18 @@ class FormBase:
         self.container_el.querySelector('.da-cancel-button').innerHTML = value
 
 
-    def tabs_content(self, tabs):
-        html_content = f'<div id="{self.form_id}_tabs"></div>'
+    def tabs_content(self, tabs, tabs_config):
+        html_content = f'<div id="{self.form_id}_tabs" class="{tabs_config.get("header_class", "")}"></div>'
         tab_items = []
         form_fields = []
         for tab in tabs:
             tab_id = f"{self.form_id}_tab_{tab['name']}"
             tab_items.append({'header': {'text': tab['label']}, 'content': f"#{tab_id}"})
             html_content += f'<div id="{tab_id}">'
-            if 'sections' in tab:
+            if 'content' in tab:
+                html_content += tab['content']
+                form_fields.extend(tab.get('fields', []))
+            elif 'sections' in tab:
                 tab_html, tab_fields = self.sections_content(tab['sections'])
                 html_content += f'<br>{tab_html}'
                 form_fields.extend(tab_fields)
@@ -250,7 +255,10 @@ class FormBase:
             if 'label' in section and section['label'] is not None:
                 html_content += (f'<h5 class="{section.get("label_class", "da-dialog-section-header")}" '
                                  f'style={section.get("label_style", "")}>{section["label"]}</h5>')
-            if 'rows' in section:
+            if 'content' in section:
+                html_content += section['content']
+                form_fields.extend(section.get('fields', []))
+            elif 'rows' in section:
                 for row in section['rows']:
                     html_content += '<div class="row">'
                     col_size = 12 // (len(row) or 1)
@@ -339,7 +347,7 @@ class FormBase:
                     button.content = 'Close'
 
         self.container_el.style.visibility = 'visible'
-        self.form.cssClass = 'e-fixed py-dialog'
+        # self.form.cssClass = 'e-fixed py-dialog'
         if self.form_tabs is not None:
             for i in range(len(self.form_tabs) - 1, -1, -1):
                 self.tabs.select(i)

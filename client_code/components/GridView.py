@@ -77,7 +77,7 @@ GRID_DEFAULT_SELECTION_SETTINGS = {
 
 GRID_DEFAULT_FILTER_SETTINGS = {'type': 'Menu'}
 
-GRID_HEIGHT_OFFSET = 25
+GRID_HEIGHT_OFFSET = 50
 GRID_DEFAULT_COLUMN_WIDTH = 150
 GRID_DEFAULT_CUSTOM_ATTRIBUTES = {'class': 'align-top'}
 
@@ -113,6 +113,8 @@ class GridView:
     def __init__(self,
                  container_id=None,
                  form_container_id=None,
+                 bounding_box_id=None,
+                 grid_height_offset=None,
                  title=None,
                  model=None,
                  view_name=None,
@@ -134,6 +136,8 @@ class GridView:
         self.grid_height = None
         self.grid_el_id = None
         self.container_id = container_id or AppEnv.content_container_id
+        self.bounding_box_id = bounding_box_id or self.container_id
+        self.grid_height_offset = grid_height_offset or GRID_HEIGHT_OFFSET
         self.form_container_id = form_container_id or container_id
         self.container_el = None
         self.search_queries = search_queries
@@ -382,6 +386,10 @@ class GridView:
         # create Grid control
         # print('\nGrid config\n', self.grid_config, '\n')
         self.grid = ej.grids.Grid(self.grid_config)
+        self.html = f'\
+            <div id="da-grid-container-{self.grid_el_id}">\
+                <div id="{self.grid_el_id}"></div>\
+            </div>'
 
     @staticmethod
     def format_value(col, row, cell):
@@ -394,21 +402,44 @@ class GridView:
         # print('\nGrid data source\n', self.grid.dataSource, '\n')
         self.grid_column_indexes = {col.get('field'): i for i, col in enumerate(self.grid.columns)}
         self.container_el = jQuery(f"#{self.container_id}")[0]
-        self.grid_height = self.container_el.offsetHeight - GRID_HEIGHT_OFFSET
+        bounding_box_el = jQuery(f"#{self.bounding_box_id}")[0]
+        self.grid_height = self.container_el.offsetHeight - self.grid_height_offset
+        grid_frame_top = bounding_box_el.getBoundingClientRect().top + anvil.js.window.pageYOffset
+        viewport_height = anvil.js.window.innerHeight or anvil.js.window.document.documentElement.clientHeight
+        self.grid_height = viewport_height - grid_frame_top - self.grid_height_offset
         if self.grid_height < 0:
             self.grid_height = None
-        print('grid height A', self.grid_height, self.container_el.offsetHeight, GRID_HEIGHT_OFFSET)
-        print('container_el', self.container_el.id)
+        print('grid height A', self.grid_height, grid_frame_top, viewport_height, self.grid_height_offset)
+        # print(self.container_el.offsetHeight, self.container_el.style.height)
+        # print(self.container_el.getBoundingClientRect().top, self.container_el.getBoundingClientRect().bottom)
+        # print(self.container_el.id, self.container_el.offsetHeight, self.container_el.style.height)
+        # parent_el = self.container_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
+        # parent_el = parent_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
+        # parent_el = parent_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
+        # parent_el = parent_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
+        # parent_el = parent_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
+        # parent_el = parent_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
+        # parent_el = parent_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
+        # parent_el = parent_el.parentNode
+        # print(parent_el.id, 'o', parent_el.offsetHeight, 'h', parent_el.parentNode.style.height)
         if self.grid_height:
-            self.container_el.innerHTML = f'\
+            self.html = f'\
                 <div id="da-grid-container-{self.grid_el_id}" style="height:{self.grid_height}px;">\
                     <div id="{self.grid_el_id}"></div>\
                 </div>'
         else:
-            self.container_el.innerHTML = f'\
+            self.html = f'\
                 <div id="da-grid-container-{self.grid_el_id}">\
                     <div id="{self.grid_el_id}"></div>\
                 </div>'
+        self.container_el.innerHTML = self.html
         self.grid.appendTo(jQuery(f"#{self.grid_el_id}")[0])
         if self.grid_height is None:
             print('grid height B', self.grid.height, self.container_el.offsetHeight)

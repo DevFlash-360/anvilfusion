@@ -23,28 +23,49 @@ class Tabs:
             item = {
                 'id': tab.get('id') or f"tab-{tab['name']}-{uuid.uuid4()}",
                 'label': tab.get('label') or tab['name'],
-                'content_id': f"tab-{tab['name']}-content-{uuid.uuid4()}",
+                'content_id': tab.get('content_id', None) or f"tab-{tab['name']}-content-{uuid.uuid4()}",
                 'content': tab.get('content') or '',
                 'enabled': tab.get('enabled') or True
             }
             self.items[tab['name']] = item
 
-        self.html = self.tabs_content()
+        self.html = self.get_tabs_content()
 
 
-    def tabs_content(self):
+    def get_tabs_content(self):
         html = f'<div id="{self.tabs_id}"></div>'
         for item in self.items.values():
-            html += f'<div id="{item["content_id"]}" style="display:none;">{item["content"]}</div>'
+            html += f'<div id="{item["content_id"]}">{item["content"]}</div>'
         return html
 
 
     def form_show(self):
         anvil.js.window.document.getElementById(self.container_id).innerHTML = self.html
+        tabs_config = [
+            {
+                'id': item['id'],
+                'header': {'text': item['label']},
+                # 'content': f'<div id="{item["content_id"]}">{item["content"]}</div>',
+                'content': f'#{item["content_id"]}',
+                'cssClass': 'da-tabs-item',
+                'disabled': not item['enabled'],
+            }
+            for item in self.items.values()
+        ]
         self.tabs = ej.navigations.Tab({
-            'items': [{'header': {'text': item['label']}, 'content': f"#{item['content_id']}"}
-                      for item in self.items.values()],
+            'items': tabs_config,
             'animation': {'previous': {'effect': 'None'}, 'next': {'effect': 'None'}},
             'selectedItem': self.selected_item,
         })
         self.tabs.appendTo(jQuery(f'#{self.tabs_id}')[0])
+        for i in range(len(self.items.keys()) - 1, -1, -1):
+            self.tabs.select(i)
+
+
+    def set_tab_content(self, tab_name=None, content=''):
+        tab_id = self.items[tab_name]['id']
+        print('set_tab_content', tab_name, tab_id)
+        for item in self.tabs.items:
+            if item.id == tab_id:
+                item.content = content
+                break

@@ -42,6 +42,7 @@ class BaseInput:
                  col_class=None,
                  col_style=None,
                  css_class=None,
+                 container_class=None,
                  value=None,
                  save=True,
                  enabled=True,
@@ -64,6 +65,7 @@ class BaseInput:
         self.col_class = col_class
         self.col_style = col_style
         self.css_class = css_class
+        self.container_class = container_class or 'form-group da-form-group'
         self.el_style = el_style
         self._value = value
         self.save = save
@@ -86,7 +88,7 @@ class BaseInput:
             self.html = f'<div id="{self.el_id}"></div>'
         else:
             self.html = f'\
-                <div class="form-group da-form-group">\
+                <div class="{self.container_class}">\
                     <input class="form-control da-form-group" id="{self.el_id}" name="{self.el_id}">\
                 </div>'
 
@@ -797,7 +799,7 @@ class DropdownInput(BaseInput):
             if self.inplace_mode is None:
                 self._value = self.control.value
             else:
-                if 'compPrevValue' in self.control:
+                if 'compPrevValue' in self.control.keys():
                     self._value = self.control.compPrevValue
                 else:
                     self._value = self.control.value
