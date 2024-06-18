@@ -81,7 +81,7 @@ class BaseInput:
         self.visible = False
         self.on_change = on_change
 
-        self.grid_data = None
+        self.edit_data = None
         self.edit_el = None
 
         if self.inplace_mode is not None:
@@ -203,7 +203,7 @@ class BaseInput:
             self.on_change(DotDict({'name': self.name, 'value': self.value if args.get('value') else None}))
 
     def grid_edit_create(self, args):
-        self.grid_data = args.data
+        self.edit_data = args.data
         self.edit_el = anvil.js.window.document.createElement('input')
         return self.edit_el
 
@@ -848,7 +848,13 @@ class LookupInput(DropdownInput):
                  add_item=False, inline_grid=False,
                  **kwargs):
         self.model = model
-        self.text_field = text_field or getattr(AppEnv.data_models, self.model)._title if self.model else 'name'
+        if text_field:
+            self.display_field = text_field
+        elif self.model:
+            self.display_field = getattr(AppEnv.data_models, self.model)._title
+        else:
+            self.display_field = 'name'
+        # self.text_field = text_field or getattr(AppEnv.data_models, self.model)._title if self.model else 'name'
         self.compute_option = compute_option
         self.add_item = add_item
         self.add_item_label = add_item_label or 'Add Item'
@@ -861,7 +867,7 @@ class LookupInput(DropdownInput):
             if AppEnv.enum_models and self.model in AppEnv.enum_models:
                 options = AppEnv.enum_models[self.model].options
             elif not data and get_data:
-                cols = [self.text_field] if isinstance(self.text_field, str) else self.text_field
+                cols = [self.display_field] if isinstance(self.display_field, str) else self.display_field
                 data = getattr(AppEnv.data_models, self.model).get_grid_view(
                     view_config={'columns': [{'name': col} for col in cols]},
                     filters=filters, search_queries=search_queries)
@@ -870,7 +876,7 @@ class LookupInput(DropdownInput):
             options = [
                 {
                     'name': self.compute_option(option) if self.compute_option and callable(self.compute_option)
-                    else option.get(self.text_field.replace('.', '__'), ''),
+                    else option.get(self.display_field.replace('.', '__'), ''),
                     'uid': option['uid'],
                 } for option in data
             ]
@@ -904,13 +910,13 @@ class LookupInput(DropdownInput):
             if self.compute_option and callable(self.compute_option):
                 name = self.compute_option(data_row)
             else:
-                name = self.get_field_value(data_row, self.text_field)
+                name = self.get_field_value(data_row, self.display_field)
             uid = data_row['uid']
             options.append({'name': name, 'uid': uid})
+        print('options', options)
         return options
 
     def get_field_value(self, data, field):
-        # print('get field value', data, field)
         field_name = field.split('.', 1)
         if len(field_name) > 1:
             return self.get_field_value(data[field_name[0]], field_name[1])
