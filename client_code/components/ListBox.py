@@ -10,13 +10,18 @@ class ListBox(BaseInput):
                  value_field='uid',
                  data=None,
                  options=None,
+                 select='single',
+                 select_all=False,
                  **kwargs):
         super().__init__(**kwargs)
+
+        self.select = 'Multiple' if select == 'multi' else 'Single'
+        self.select_all = select_all
         self.float_label = False
-        self.html = f'\
-            <div class="{self.container_class}">\
-                <div class="form-control da-form-group" id="{self.el_id}" name="{self.el_id}"></div>\
-            </div>'
+        self.html = f'<div class="{self.container_class}">'
+        if self.label:
+            self.html += f'<label id="label_{self.el_id}" class="da-form-input-label">{self.label or ""}</label>'
+        self.html += f'<input class="form-control da-form-group" id="{self.el_id}" name="{self.el_id}"></div>'
 
         self.value_field = value_field
         self.text_field = text_field
@@ -43,14 +48,12 @@ class ListBox(BaseInput):
             self.control.dataSource = options
 
     def create_control(self, **kwargs):
+        selection_settings = {'mode': self.select}
+        if self.select_all:
+            selection_settings['showSelectAll'] = True
+            selection_settings['showCheckbox'] = True
         self.control = ej.dropdowns.ListBox({
             'dataSource': self.options,
-            'headerTitle': self.label,
-            'showHeader': True,
-            'showHeaderBackButton': True,
-            'headerBackButtonText': 'Back',
-            'showHeaderTitle': True,
-            'headerTitleText': self.label,
-            'enableHeaderTitle': True,
-            'enableHeaderBackButton': True,
+            'fields': self.fields,
+            'selectionSettings': selection_settings,
         })
