@@ -100,6 +100,8 @@ def get_model_attribute(class_name, attr_name):
         attr = cls._attributes[attr_name]
     elif attr_name in cls._computes:
         attr = cls._computes[attr_name]
+    # elif attr_name in cls._relationships:
+    #     attr = cls._relationships[attr_name]
     elif '.' in attr_name:
         attr_name = attr_name.split('.')
         if attr_name[0] in cls._attributes:
@@ -128,6 +130,7 @@ class GridView:
                  persist=True,
                  edit_mode='dialog',
                  add_edit_form=None,
+                 add_edit_form_props=None,
                  content_wrap=True,
                  data=None,
                  ):
@@ -144,6 +147,7 @@ class GridView:
         self.filters = filters
         self.persist = persist
         self.form_class = None
+        self.form_class_props = add_edit_form_props or {}
         self.edit_mode = edit_mode
         self.confirm_dialog = None
         self.show_confirm_dialog = True
@@ -244,7 +248,7 @@ class GridView:
                         if col_attr.field_type == dmtypes.FieldTypes.OBJECT and col_attr.schema:
                             col_attr = col_attr.schema[column['name'].split('.')[1]]
                             # print('object', column['name'], col_attr)
-                    # print(column)
+                    # print(col_attr)
                     grid_column = {
                         # 'field': column['name'].split('.')[0] if '.' in column['name'] else column['name'],
                         'field': column['name'].replace('.', '__'),
@@ -630,6 +634,7 @@ class GridView:
                         source=self,
                         target=self.form_container_id,
                         persist=self.persist,
+                        **self.form_class_props,
                         ).form_show()
 
     def confirm_delete(self, args):
