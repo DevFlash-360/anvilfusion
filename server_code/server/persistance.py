@@ -27,7 +27,7 @@ def caching_query(search_function):
     def wrapper(
             class_name, module_name, page_length, page, max_depth, with_class_name, background_task_id, **search_args
     ):
-        # print('caching_query', search_args)
+        print('caching_query', search_args)
         logged_user = get_logged_user(background_task_id=background_task_id)
         user_permissions = get_user_permissions(logged_user=logged_user)
         all_tenants = False
@@ -39,12 +39,13 @@ def caching_query(search_function):
         if 'tenant_uid' not in search_args.keys():
             search_args['tenant_uid'] = logged_user.get('tenant_uid', None)
         if (user_permissions['super_admin'] and not user_permissions['locked_tenant']
-                and search_args['tenant_uid'] != SYSTEM_TENANT_UID):
-            search_args.pop('tenant_uid', None)
-        if user_permissions['super_admin'] and search_args['tenant_uid'] is None:
+                and (search_args['tenant_uid'] != SYSTEM_TENANT_UID) or search_args['tenant_uid'] is None):
             search_args.pop('tenant_uid', None)
             all_tenants = True
-        if user_permissions['developer'] and search_args['tenant_uid'] is None:
+        # if user_permissions['super_admin'] and search_args['tenant_uid'] is None:
+        #     search_args.pop('tenant_uid', None)
+        #     all_tenants = True
+        elif user_permissions['developer'] and search_args['tenant_uid'] is None:
             search_args.pop('tenant_uid', None)
             all_tenants = True
         search_query = search_args.pop('search_query', None)
