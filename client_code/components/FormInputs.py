@@ -6,7 +6,7 @@ from ..datamodel.types import FieldTypes
 from ..datamodel.particles import ModelTypeBase
 from ..tools.utils import AppEnv, DotDict, new_el_id, label_to_id
 import datetime
-import time
+import json
 import uuid
 
 
@@ -46,6 +46,7 @@ class BaseInput:
                  value=None,
                  save=True,
                  enabled=True,
+                 hidden=False,
                  el_id=None,
                  el_style=None,
                  container_id=None,
@@ -79,6 +80,7 @@ class BaseInput:
         self.grid_field = (grid_field or self.name or self.label or '').replace('.', '__')
         self._control = None
         self.visible = False
+        self.hidden = hidden
         self.on_change = on_change
 
         self.edit_data = None
@@ -194,7 +196,9 @@ class BaseInput:
     def hide(self):
         if self.visible:
             # print('hide', self.name)
-            anvil.js.window.document.getElementById(self.container_id).innerHTML = ''
+            el = anvil.js.window.document.getElementById(self.container_id)
+            if el:
+                el.innerHTML = ''
             self.visible = False
 
     def change(self, args):
@@ -348,7 +352,9 @@ class SectionSubtitle(BaseInput):
     @value.setter
     def value(self, value):
         self._value = value
-        anvil.js.window.document.getElementById(self.el_id).innerHTML = self._value
+        el = anvil.js.window.document.getElementById(self.el_id)
+        if el:
+            el.innerHTML = self._value
 
 
 class ContentFrame(BaseInput):
@@ -431,8 +437,9 @@ class TextInput(BaseInput):
 
 # Multi line text input
 class MultiLineInput(BaseInput):
-    def __init__(self, rows=2, **kwargs):
+    def __init__(self, rows=2, is_object=False, **kwargs):
         super().__init__(**kwargs)
+        self.is_object = is_object
 
         if self.inplace_mode is None:
             self.html = (f'\
@@ -451,6 +458,41 @@ class MultiLineInput(BaseInput):
             super().create_control(control_type='Text', model=model)
         else:
             self.control = ej.inputs.TextBox({'placeholder': self.placeholder})
+
+    @property
+    def value(self):
+        base_value = super().value
+        if self.is_object and base_value is not None:
+            try:
+                return json.loads(base_value)
+            except json.JSONDecodeError as e:
+                return f'Input error: {e} ({base_value})'
+        else:
+            return base_value
+
+    @value.setter
+    def value(self, value):
+        # print('set value', self.name, self.is_object, isinstance(value, (dict, list)))
+        if self.is_object and isinstance(value, (dict, list)):
+            self._value = json.dumps(value, indent=4)
+        else:
+            self._value = value
+        if self._control is not None:
+            self.control.value = self._value
+
+    def show(self):
+        super().show()
+        el = anvil.js.window.document.getElementById(self.el_id)
+        el.addEventListener('keydown', self.allow_enter_key)
+
+    def allow_enter_key(self, event):
+        if event.key == 'Enter':
+            event.preventDefault()  # Prevent default behavior
+            el = anvil.js.window.document.getElementById(self.el_id)
+            start = el.selectionStart
+            end = el.selectionEnd
+            el.value = el.value[:start] + '\n' + el.value[end:]
+            el.selectionStart = el.selectionEnd = start + 1
 
 
 # Number input
@@ -940,6 +982,7 @@ class LookupInput(DropdownInput):
 
     @value.setter
     def value(self, value):
+        self._value = value
         if self._control is not None:
             if value:
                 if self.select == 'single':

@@ -325,12 +325,14 @@ class FormBase:
                 field.visible = False
         for field in [x for x in self.form_fields if x not in self.subforms and not x.is_dependent]:
             # print(field.name)
-            field.show()
             if field.name and getattr(self.data, field.name, None):
                 field.value = self.data[field.name]
+            if not field.hidden:
+                field.show()
         for field in [x for x in self.form_fields if x in self.subforms or x.is_dependent]:
-            field.show()
             field.value = self.data
+            if not field.hidden:
+                field.show()
         # for subform in self.subforms:
         #     subform.value = self.data
         for field in self.form_fields:
@@ -392,12 +394,12 @@ class FormBase:
                     field.hide()
                     field.value = None
                 self.form.hide()
-            else:
+            elif args is not None:
                 args.cancel = True
             if self.update_source is not None:
                 self.update_source(self.data, add_new)
                 print('update_source', self.data)
-        else:
+        elif args is not None:
             args.cancel = True
             print('Invalid Data')
 
@@ -405,6 +407,7 @@ class FormBase:
         print('CANCEL BASE')
         # args.cancel = True
         for field in self.form_fields:
+            # print('field', field.name)
             field.value = None
             field.hide()
         # self.form_fields = []
